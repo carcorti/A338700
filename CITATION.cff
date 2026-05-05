@@ -7,7 +7,7 @@ authors:
 abstract: >-
   C17/OpenMP implementation performing an exhaustive search for the ninth term
   of OEIS A338700. The search covers [1372604395439, 500000000000000]
-  and establishes the verified lower bound a(9) > 5e14.
+  and establishes the verified lower bound a(9) > 5·10^14.
 keywords:
   - OEIS
   - A338700
@@ -20,5 +20,5 @@ keywords:
 license: MIT
 version: "1.0.0"
 date-released: 2026-05-04
-repository-code: "https://github.com/<TBD>/a338700"
-doi: "10.5281/zenodo.<TBD>"
+repository-code: "https://github.com/carcorti/A338700"
+doi: "10.5281/zenodo.20039591"

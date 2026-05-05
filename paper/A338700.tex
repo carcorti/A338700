@@ -54,8 +54,7 @@ yield any new term. Consequently we establish the verified lower bound
 \]
 The search processed $\num{15186821470495}$ candidate primes over a total
 wall-clock time of 52~h 49~min on a 16-thread consumer-class machine
-(AMD Ryzen 9~7940HS). The source code, selected campaign log, and reproducibility
-artefacts are released under the MIT licence~\cite{repo}.
+(AMD Ryzen 9~7940HS). The source code, selected campaign log, and reproducibility artefacts are released under the MIT licence~\cite{repo}.
 \end{abstract}
 
 \section{Definition and known terms}
@@ -368,8 +367,8 @@ of 2\,097\,152 odd candidates per block, batches of 4\,096 blocks each.
 \item Licence: MIT.
 \end{itemize}
 
-The full source code, build system, validation harness, and selected campaign
-log are released in the repository~\cite{repo}.
+The full source code, build system, validation harness, and selected
+campaign log are released in the repository~\cite{repo}.
 
 \subsection{Results}
 
@@ -444,14 +443,10 @@ The repository~\cite{repo} contains:
 
 \begin{itemize}
 \item the full C17 source (single binary, $<3000$~LOC);
-\item a \texttt{Makefile} with release targets
-\texttt{release}, \texttt{release-znver4}, and
-\texttt{release-lto}; validation targets
-\texttt{validate}, \texttt{validate-small},
-\texttt{validate-medium}, and \texttt{validate-full};
-and diagnostic or benchmark targets including
-\texttt{sanitize}, \texttt{profile}, \texttt{bench},
-\texttt{bench-schedule}, and \texttt{bench-blockodds};
+\item a \texttt{Makefile} with five main targets:
+\texttt{validate-small}, \texttt{validate-medium},
+\texttt{validate-full}, \texttt{bench-schedule},
+\texttt{release-znver4};
 \item the selected campaign log
 (\texttt{a338700\_campaign.log}), documenting the main campaign sessions.
 \end{itemize}
@@ -508,7 +503,9 @@ Qwen); and composition of this manuscript (Claude Sonnet 4.6,
 Anthropic). Every quantitative claim in this paper was verified
 computationally by the author; all mathematical statements were checked
 by the author before inclusion. The author takes full scientific
-responsibility for the content.
+responsibility for the content. The exact model versions and API
+identifiers used at each stage are recorded in the repository
+at~\cite{repo}.
 
 \begin{thebibliography}{9}
 
@@ -571,8 +568,8 @@ The On-Line Encyclopedia of Integer Sequences,
 C.\ Corti,
 \emph{A338700 — extending the OEIS sequence: source code, logs and
 reproducibility artefacts},
-GitHub repository: \url{https://github.com/<TBD>/a338700}.
-Archived release: Zenodo, DOI \texttt{10.5281/zenodo.<TBD>}.
+GitHub repository: \url{https://github.com/carcorti/A338700}.
+Archived release: Zenodo, DOI \href{https://doi.org/10.5281/zenodo.20039591}{\texttt{10.5281/zenodo.20039591}}.
 
 \end{thebibliography}
 
