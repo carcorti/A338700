@@ -1,0 +1,579 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[expansion=false]{microtype}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{hyperref}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=blue,
+  urlcolor=blue,
+  pdftitle={A computer-verified lower bound for OEIS A338700(9)},
+  pdfauthor={Carlo Corti}
+}
+
+\sisetup{group-separator={\,},group-minimum-digits=4}
+
+\title{A computer-verified lower bound for the ninth term of OEIS sequence A338700}
+
+\author{Carlo Corti \\[0.4ex]
+\small Independent researcher \\[0.2ex]
+\small \href{mailto:carlo.corti@outlook.com}{carlo.corti@outlook.com}}
+
+\date{May 4, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The OEIS sequence A338700 records, for each $n\ge 1$, the smallest prime
+$p_k$ such that $n$ consecutive primes $p_k, p_{k+1}, \ldots, p_{k+n-1}$
+are all Sophie Germain primes. Eight terms are known, the largest being
+$a(8) = 1\,372\,604\,395\,439$ (Ehrenstein, 2021). We report an exhaustive
+computer search of the interval $[a(8),\,5\cdot 10^{14}]$ that did not
+yield any new term. Consequently we establish the verified lower bound
+\[
+  a(9) \;>\; 5 \cdot 10^{14}.
+\]
+The search processed $\num{15186821470495}$ candidate primes over a total
+wall-clock time of 52~h 49~min on a 16-thread consumer-class machine
+(AMD Ryzen 9~7940HS). The source code, selected campaign log, and reproducibility
+artefacts are released under the MIT licence~\cite{repo}.
+\end{abstract}
+
+\section{Definition and known terms}
+
+Let $p_1 < p_2 < p_3 < \ldots$ denote the primes in increasing order.
+A prime $p$ is called a \emph{Sophie Germain prime} if $2p+1$ is also
+prime; the set of such primes is OEIS A005384~\cite{oeis-a005384}.
+Long runs of consecutive Sophie Germain primes are rare and their
+distribution is governed by a Hardy--Littlewood type heuristic~\cite{hardy-littlewood}
+(§\ref{sec:campaign}). Each new term of A338700 represents a
+record-length run, and exact computation of $a(9)$ would be the first
+extension of the sequence since Ehrenstein's 2021 contribution of $a(8)$.
+The present work does not find $a(9)$ but establishes a substantially
+improved lower bound.
+
+\begin{definition}[OEIS A338700~\cite{oeis-a338700}]
+For $n \ge 1$, $a(n)$ is the smallest prime $p_k$ such that the $n$
+consecutive primes $p_k, p_{k+1}, \ldots, p_{k+n-1}$ are all Sophie
+Germain primes.
+\end{definition}
+
+The function $n \mapsto a(n)$ is non-decreasing: any run of length $n+1$
+contains a run of length $n$ at the same starting prime, hence
+$a(n+1) \ge a(n)$, with equality possible if the first run of length $n$
+already happens to extend to length $n+1$.
+
+The eight known terms are listed in Table~\ref{tab:known}.
+
+\begin{table}[ht]
+\centering
+\caption{Known terms of A338700.}
+\label{tab:known}
+\begin{tabular}{rrl}
+\toprule
+$n$ & $a(n)$ & Source \\
+\midrule
+1 & 2 & trivial \\
+2 & 2 & trivial \\
+3 & 2 & trivial \\
+4 & \num{1433849} & OEIS \\
+5 & \num{9816899} & OEIS \\
+6 & \num{445480319} & OEIS \\
+7 & \num{298098924131} & G.\ Resta, 2004~\cite{rivera-puzzle71} \\
+8 & \num{1372604395439} & M.\ Ehrenstein, 2021~\cite{oeis-a338700} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Search strategy}
+
+\subsection{Reduction to a sieve problem}
+
+Finding $a(n)$ for a given $n$ amounts to scanning the primes in
+increasing order and maintaining the length of the current run of
+consecutive Sophie Germain primes; the first index at which the run
+reaches length $n$ yields $a(n)$. Two equivalent computational kernels
+are available:
+
+\begin{itemize}
+\item \textbf{MR mode.} Generate the primes $p$ in $[L,U]$ with a
+segmented sieve of Eratosthenes, then test each $p$ for the Sophie
+Germain property by a Miller--Rabin primality test~\cite{miller,miller-rabin} on $2p+1$.
+
+\item \textbf{Double-sieve mode.} Sieve simultaneously the interval
+$p \in [L,U]$ (yielding a bitmap $P$ of primes) and the interval
+$q \in [2L+1,\,2U+1]$ (yielding a bitmap $Q$ of primes). The Sophie
+Germain primes in $[L,U]$ are then exactly the indices for which both
+$P[p]$ and $Q[2p+1]$ are set. No Miller--Rabin call is needed.
+\end{itemize}
+
+For the range of interest the double-sieve mode is faster because
+Miller--Rabin on a $64$-bit operand costs several hundred CPU cycles,
+whereas a sieve strike is a single bit operation. The production
+campaign used double-sieve mode throughout.
+
+Both bitmaps are sieved using base primes up to
+$\lceil\sqrt{2U+1}\,\rceil$. For the production campaign
+($U = 5\cdot 10^{14}$) this bound is approximately $3.16\cdot 10^7$;
+the resulting list fits in roughly 14~MB and is shared read-only across
+all threads.
+
+\subsection{Numerical types}
+\label{sec:numerical-types}
+
+For $p < 2^{63}$ one has $2p+1 < 2^{64}$, so all prime arithmetic fits in
+\texttt{uint64\_t}. Modular multiplications inside Miller--Rabin
+(retained for the validation harness) use \texttt{\_\_uint128\_t}
+intermediate products, which GCC compiles to native \texttt{MUL/DIV}
+instructions on x86-64 without library calls.
+
+The Miller--Rabin implementation is \emph{deterministic} for all inputs
+below $3.317\cdot 10^{24}$ using the twelve witness bases
+$\{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37\}$, which covers the
+full range $n < 2^{64}$ relevant to this search. This
+deterministic bound is established in~\cite{mr-deterministic}.
+
+\subsection{Algorithm and block-boundary reconciliation}
+\label{sec:algorithm}
+
+The interval $[L,U]$ is partitioned into contiguous \emph{blocks} of fixed
+width $W = 2^{21}$ odd integers (i.e.\ each block $[\ell_i, h_i]$ spans
+$W$ consecutive odd integers). Within each block, the per-block kernel
+(Algorithm~1) sieves both $P$ and $Q$, walks the primes in $[\ell_i, h_i]$
+in increasing order, and emits a fixed-size summary $s_i$ together with all
+runs entirely contained in the block. After the parallel phase
+completes, a deterministic serial pass (Algorithm~2) walks the
+summaries $s_0, s_1, \ldots$ in order and reconstructs the runs that
+cross block boundaries.
+
+Two integer parameters govern run tracking throughout:
+\begin{itemize}
+\item $n_{\min}$ (\texttt{cfg\_target}): the target run length, equal
+to~$9$ for the production campaign. A run is recorded only when its
+length reaches or exceeds $n_{\min}$.
+\item $M$ (\texttt{max\_run}): the run-length cap, set equal to
+$n_{\min}$ in the production campaign. Runs longer than $M$ are
+truncated to $M$ in the carry and prefix/suffix fields; since any run
+of length $\ge n_{\min}$ disproves the lower bound, this truncation
+does not affect the correctness of the search.
+\end{itemize}
+
+\paragraph{Per-block summary.} Each block emits a record $s_i$ with
+the following fields, where ``Sophie Germain prime'' is abbreviated SG:
+\begin{itemize}
+\item \texttt{num\_primes}: the number of primes in $[\ell_i, h_i]$;
+\item \texttt{first\_prime}, \texttt{last\_prime}: the smallest and
+largest primes in $[\ell_i, h_i]$ (or $0$ if the block contains no
+primes);
+\item \texttt{prefix\_len}, \texttt{prefix\_start}: length and starting
+prime of the maximal SG-run that begins at \texttt{first\_prime}, or $0$
+if \texttt{first\_prime} is not SG;
+\item \texttt{suffix\_len}, \texttt{suffix\_start}: length and starting
+prime of the maximal SG-run that ends at \texttt{last\_prime}, or $0$
+if \texttt{last\_prime} is not SG;
+\item \texttt{all\_sg}: a Boolean flag, true iff every prime in the
+block is SG (computed directly in Algorithm~1, line~4 and updated
+through the loop).
+\end{itemize}
+
+\begin{algorithm}[ht]
+\caption{Per-block scan (executed once per block, in parallel)}
+\begin{algorithmic}[1]
+\Require base primes, block range $[\ell_i, h_i]$, run-length cap~$M$,
+recording threshold~$n_{\min}$
+\State sieve $P$ on odd integers in $[\ell_i, h_i]$
+\State sieve $Q$ on odd integers in $[2\ell_i+1, 2h_i+1]$
+\State $\textit{run} \gets 0$;\ \ $\textit{run\_start} \gets 0$
+\State zero all fields of $s_i$;\ \ $s_i.\texttt{all\_sg} \gets \textbf{true}$
+\ForAll{primes $p$ in $[\ell_i, h_i]$ taken in increasing order}
+  \State $s_i.\texttt{num\_primes} \mathrel{+}= 1$
+  \If{$s_i.\texttt{first\_prime} = 0$}\ \ $s_i.\texttt{first\_prime} \gets p$\EndIf
+  \State $s_i.\texttt{last\_prime} \gets p$
+  \State $\textit{sg} \gets P[p] \wedge Q[2p+1]$
+  \If{$\textit{sg}$}
+    \If{$\textit{run} = 0$}\ \ $\textit{run\_start} \gets p$\EndIf
+    \State $\textit{run} \gets \min(\textit{run}+1,\,M)$
+    \If{$\textit{run} \ge n_{\min}$}
+      \State record run of length $\textit{run}$ at $\textit{run\_start}$ in thread-local record
+    \EndIf
+  \Else
+    \State $s_i.\texttt{all\_sg} \gets \textbf{false}$
+    \State $\textit{run} \gets 0$
+  \EndIf
+  \State maintain $s_i.\texttt{prefix\_*}$ until first non-SG prime; maintain $s_i.\texttt{suffix\_*}$ at every SG-extending step
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[ht]
+\caption{Boundary reconciliation (executed serially after the parallel phase)}
+\begin{algorithmic}[1]
+\Require summaries $s_0, s_1, \ldots, s_{B-1}$ in block order; cap $M$;
+recording threshold~$n_{\min}$
+\State $\textit{carry} \gets 0$;\ \ $\textit{carry\_start} \gets 0$
+\For{$i = 0, 1, \ldots, B-1$}
+  \If{$s_i.\texttt{num\_primes} = 0$}\ \ \textbf{continue}\EndIf
+  \If{$\textit{carry} > 0 \wedge s_i.\texttt{prefix\_len} > 0$}
+     \State $\textit{merged} \gets \min(\textit{carry} + s_i.\texttt{prefix\_len},\,M)$
+     \If{$\textit{merged} \ge n_{\min}$}
+       \State record run of length $\textit{merged}$ at $\textit{carry\_start}$ in global record
+     \EndIf
+  \EndIf
+  \If{$s_i.\texttt{all\_sg}$}
+     \If{$\textit{carry} = 0$}\ $\textit{carry\_start} \gets s_i.\texttt{first\_prime}$\EndIf
+     \State $\textit{carry} \gets \min(\textit{carry} + s_i.\texttt{num\_primes},\,M)$
+     \If{$\textit{carry} \ge n_{\min}$}
+       \State record run of length $\textit{carry}$ at $\textit{carry\_start}$ in global record \Comment{multi-block run}
+     \EndIf
+  \ElsIf{$s_i.\texttt{suffix\_len} > 0$}
+     \State $\textit{carry} \gets s_i.\texttt{suffix\_len}$;\ \ $\textit{carry\_start} \gets s_i.\texttt{suffix\_start}$
+  \Else
+     \State $\textit{carry} \gets 0$;\ \ $\textit{carry\_start} \gets 0$
+  \EndIf
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Invariant and correctness.}
+Let $r(p)$ denote the length of the maximal run of consecutive SG primes
+ending at the prime $p$, taken over the global prime sequence (not
+restricted to any block). The reconciliation algorithm maintains the
+following invariant.
+
+\begin{proposition}[Reconciliation invariant]
+\label{prop:invariant}
+After processing summaries $s_0, \ldots, s_{i-1}$:
+\begin{itemize}
+\item if the last prime processed so far is SG, then $\textit{carry}$
+equals $\min(r(\text{last prime}), M)$ and
+$\textit{carry\_start}$ is the starting prime of that run;
+\item otherwise $\textit{carry} = 0$.
+\end{itemize}
+Moreover, every maximal SG-run that ends within $\bigcup_{j<i} [\ell_j, h_j]$
+has been recorded in either a thread-local record (Algorithm~1) or the
+global record (Algorithm~2), at least once.
+(For the purposes of this search, recording a run multiple times is
+harmless: the global record retains only the best starting prime per
+run length.)
+\end{proposition}
+
+\noindent\emph{Empirical verification (sketch).}
+The invariant is not formally proved by induction in this manuscript;
+correctness is established empirically through the three-level validation
+harness (§\ref{sec:validation}) and the overlapping-window cross-tests.
+The following sketch explains the design intent. A maximal SG-run either
+lies entirely within a single block (recorded by Algorithm~1, line~14) or
+crosses one or more block boundaries. In the latter case, its starting
+prime lies either at the first prime of some block (captured by
+$s_i.\texttt{prefix\_*}$) or at $s_i.\texttt{suffix\_start}$ for the
+leftmost block~$i$ in which the run is non-empty. Algorithm~2 closes the
+cross-boundary run exactly when its right endpoint occurs (line~5), and
+never closes the same run twice because $\textit{carry}$ is reset on the
+first non-SG prime encountered afterwards. Multi-block all-SG runs are
+tracked by accumulating \textit{carry} across consecutive all-SG blocks
+(line~12).
+
+\paragraph{Concurrency discipline.}
+The parallel phase has no shared mutable state. Each thread~$t$ writes
+exclusively to (i)~its own block summary $s_i$ (the assignment $i \mapsto
+t$ is fixed by the OpenMP schedule for the duration of that block), and
+(ii)~its own record buffer $\texttt{thread\_rec}[t]$. Both structures
+are cache-line aligned (64~bytes) to prevent false sharing. After the
+parallel phase, the serial post-pass merges all $\texttt{thread\_rec}[t]$
+into a global record and then runs Algorithm~2. There are no locks,
+atomics, or barriers within the parallel phase other than the implicit
+end-of-region barrier.
+
+\subsection{Validation harness}
+\label{sec:validation}
+
+Three validation levels were used to certify the implementation before
+the production campaign:
+
+\begin{itemize}
+\item \texttt{small}: $[0,\,10^7]$, verifies $a(1),\ldots,a(5)$
+(under one second);
+\item \texttt{medium}: $[0,\,5\cdot 10^8]$, verifies $a(1),\ldots,a(6)$
+(seconds);
+\item \texttt{full}: $[0,\,2\cdot 10^{12}]$, verifies $a(1),\ldots,a(8)$
+(hours).
+\end{itemize}
+
+All three levels reproduce the corresponding OEIS values exactly in both
+MR and double-sieve mode; the agreement is guaranteed (not merely
+probabilistic) because the MR harness uses the twelve-base deterministic
+witness set described in §\ref{sec:numerical-types}. Block-boundary
+stress tests (eight overlapping windows, both modes, each tested against
+the other) all match byte-for-byte.
+
+The double-sieve operates on odd integers only, so the prime $p = 2$ is
+handled as a special case in validation mode: when the search interval
+includes $2$ (i.e.\ $L \le 2$), the harness explicitly initialises the
+run-tracking state to reflect $p = 2$ as the first Sophie Germain prime
+($2p+1 = 5$ is prime) before entering the odd-only sieve at $p = 3$.
+This special case applies only to the validation tiers; it is not
+exercised by the production campaign, whose lower bound $L = a(8)$ is
+odd.
+
+\section{The campaign}
+\label{sec:campaign}
+
+\subsection{Search window}
+
+Because A338700 is non-decreasing, $a(9) \ge a(8)$ and the search may
+start at $L = a(8) = \num{1372604395439}$. Equality is possible (the run
+of length~$8$ starting at $a(8)$ might extend to length~$9$ or more), so
+the implementation includes the starting prime $a(8)$ in its scan. The
+initial carry is set to~$0$: the run-length analysis is self-contained
+within $[L, U]$ and does not depend on primes below~$L$.
+
+The upper bound $U = 5\cdot 10^{14}$ was chosen as a round value
+approximately $360$ times larger than $a(8)$, reachable within a
+reasonable wall-clock budget on the available hardware. Under the
+Hardy--Littlewood heuristic~\cite{hardy-littlewood} the median prediction
+for $a(9)$ is of order $10^{14}$, so $U$ exceeds it by a factor
+of~$\sim 5$. With $L \approx 1.37\cdot 10^{12}$ this gives a
+search interval of width $\sim 4.99\cdot 10^{14}$, of order $10^{14}$.
+
+\subsection{Hardware and software}
+
+\begin{itemize}
+\item CPU: AMD Ryzen 9~7940HS (Zen 4, 8 cores / 16 threads).
+\item RAM: 64\,GB DDR5.
+\item OS: Linux Mint 22.3.
+\item Compiler: GCC 13.3.0, C17, flags
+\verb|-O2 -march=native -fopenmp -std=c17|.
+\item OpenMP schedule: \texttt{OMP\_SCHEDULE=guided,4}.
+\item Implementation: 16 threads, 16-way parallel double-sieve, segment
+of 2\,097\,152 odd candidates per block, batches of 4\,096 blocks each.
+\item Licence: MIT.
+\end{itemize}
+
+The full source code, build system, validation harness, and selected campaign
+log are released in the repository~\cite{repo}.
+
+\subsection{Results}
+
+The campaign was carried out in ten consecutive sessions, with periodic
+checkpoints to a state file allowing exact resume. Aggregate figures:
+
+\begin{table}[ht]
+\centering
+\caption{Campaign aggregates.}
+\label{tab:campaign}
+\begin{tabular}{lr}
+\toprule
+Search window & $[\num{1372604395439},\,5\cdot 10^{14}]$ \\
+Total wall-clock time (10 sessions) & 52~h 49~min 11~s \\
+Total batches processed & \num{29024} \\
+Primes scanned & \num{15186821470495} \\
+Peak throughput (warm batch, 16 threads) & ${\sim}1.76\cdot 10^{9}$ odd cand./s \\
+Average throughput (full campaign) & ${\sim}8.0\cdot 10^{7}$ primes/s \\
+Sophie Germain primes found in window & \num{598620723232} \\
+Longest run found in window & length 8, at $p = a(8)$ \\
+New term $a(9)$ & not found \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The peak figure refers to the throughput of odd-integer candidates processed
+by the double-sieve in the warmest batches of the final session; it is
+measured in sieve slots per second, not confirmed primes per second. The
+average throughput is computed from total primes scanned divided by total
+wall-clock time (190\,151\,s) and reflects the overhead of ten session
+starts, periodic checkpoint writes during execution, and the natural
+variation in prime density across the interval.
+
+The proportion of Sophie Germain primes among the primes in the window,
+\[
+  \frac{\num{598620723232}}{\num{15186821470495}}
+  \;\approx\; 0.0394,
+\]
+is consistent with the Hardy--Littlewood prediction~\cite{hardy-littlewood}
+$\pi_{\mathrm{SG}}(x)/\pi(x) \sim 2 C_2 / \log x$ with twin-prime
+constant $C_2 \approx 0.6601618$ at the relevant scale
+$\log x \approx 33$, which gives the heuristic value $\approx 0.0400$.
+
+\section{Result}
+
+The exhaustive search produced the following verified statement.
+
+\begin{theorem}
+Let $a(n)$ denote the $n$-th term of OEIS A338700. Then
+\[
+  a(9) \;>\; 5 \cdot 10^{14}.
+\]
+\end{theorem}
+
+\begin{proof}[Verification]
+Every prime in the closed interval $[a(8),\,5\cdot 10^{14}]$ was
+classified as Sophie Germain or not, by means of the double-sieve
+procedure described in §2. The longest run of consecutive Sophie
+Germain primes recorded in this interval has length~$8$ and starts at
+$p = a(8)$; no run of length~$9$ exists in the interval. The
+implementation reproduces $a(1),\ldots,a(8)$ exactly under three
+independent validation levels including a full re-derivation up to
+$2\cdot 10^{12}$. Block-boundary reconciliation is verified by
+overlapping-window cross-tests and by equivalence between two
+independent kernels (MR and double-sieve). The selected campaign log and source code are archived at~\cite{repo}. The lower bound
+has been communicated to the OEIS and is recorded at~\cite{corti-oeis}.
+\end{proof}
+
+\section{Reproducibility}
+
+The repository~\cite{repo} contains:
+
+\begin{itemize}
+\item the full C17 source (single binary, $<3000$~LOC);
+\item a \texttt{Makefile} with release targets
+\texttt{release}, \texttt{release-znver4}, and
+\texttt{release-lto}; validation targets
+\texttt{validate}, \texttt{validate-small},
+\texttt{validate-medium}, and \texttt{validate-full};
+and diagnostic or benchmark targets including
+\texttt{sanitize}, \texttt{profile}, \texttt{bench},
+\texttt{bench-schedule}, and \texttt{bench-blockodds};
+\item the selected campaign log
+(\texttt{a338700\_campaign.log}), documenting the main campaign sessions.
+\end{itemize}
+
+The exact compilation flags, OpenMP schedule, and block parameters used
+in the production binary are recorded in the repository README.
+
+\subsection{Edge-block handling}
+The search interval $[L,U]$ is padded internally to a multiple of
+$\texttt{block\_odds} = 2^{21}$ odd integers. Positions beyond $U$ in the
+final block are masked out before the per-block scan emits its summary,
+so that all summary fields refer only to primes in $[L,U]$. The sieve
+itself does no bounds-checking on the padded region; correctness rests
+on the masking step.
+
+\subsection{Checkpoint format and resume integrity}
+The checkpoint file holds a single $\texttt{state\_t}$ structure with
+the following fields, in order:
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\item a 32-bit magic number and a 32-bit format version (currently~$2$);
+\item the search configuration:
+{\sloppy $\texttt{cfg\_low}$, $\texttt{cfg\_high}$,
+$\texttt{cfg\_block\_odds}$, $\texttt{cfg\_batch\_blocks}$,
+$\texttt{cfg\_target}$, $\texttt{cfg\_max\_run}$, $\texttt{cfg\_mr}$;\par}
+\item the next-batch index;
+\item the carry pair $(\textit{carry}, \textit{carry\_start})$ from
+Proposition~\ref{prop:invariant};
+\item the running totals $\texttt{total\_primes}$ and $\texttt{total\_sg}$;
+\item the global record $\texttt{global\_rec}$ (best run-starting primes
+per length);
+\item a 64-bit checksum.
+\end{itemize}
+
+The checksum is a byte-wise 8-lane XOR over the structure up to (but
+excluding) the checksum field itself. On resume, the file is rejected
+if the magic, version, or checksum does not match. Configuration fields
+loaded from the file overwrite the runtime configuration, so the resumed
+run uses exactly the same search parameters as the interrupted one.
+Writes are atomic: the new state is written to a temporary file, fsynced,
+and renamed over the previous state file, after which the parent
+directory is fsynced as well.
+
+\section*{AI use disclosure}
+
+This work was carried out with substantial support from large language
+models, used as a research assistant throughout the full workflow.
+Specifically: mathematical analysis of the candidate space and
+Hardy--Littlewood heuristics (Claude Opus 4.7, Anthropic); design of
+the computational strategy (Claude Opus 4.7); code generation in C17
+(GPT-5.5, OpenAI); LLM-based code review of successive versions, with
+six independent model passes (Claude, ChatGPT, DeepSeek, Gemini, Grok,
+Qwen); and composition of this manuscript (Claude Sonnet 4.6,
+Anthropic). Every quantitative claim in this paper was verified
+computationally by the author; all mathematical statements were checked
+by the author before inclusion. The author takes full scientific
+responsibility for the content.
+
+\begin{thebibliography}{9}
+
+\bibitem{oeis-a338700}
+The OEIS Foundation Inc.,
+\emph{Sequence A338700: Smallest prime $p$ such that $p$ and the $n-1$
+following primes are all Sophie Germain primes},
+The On-Line Encyclopedia of Integer Sequences,
+\url{https://oeis.org/A338700}.
+Sequence created by M.\ Sariyar, April 24, 2021; term $a(8)$
+contributed by M.\ Ehrenstein, April 29, 2021.
+
+\bibitem{oeis-a005384}
+The OEIS Foundation Inc.,
+\emph{Sequence A005384: Sophie Germain primes $p$: $2p+1$ is also prime},
+The On-Line Encyclopedia of Integer Sequences,
+\url{https://oeis.org/A005384}.
+
+\bibitem{rivera-puzzle71}
+C.\ Rivera,
+\emph{Puzzle 71: Consecutive primes and Cunningham chains},
+The Prime Puzzles \& Problems Connection,
+\url{https://www.primepuzzles.net/puzzles/puzz_071.htm}.
+
+\bibitem{hardy-littlewood}
+G.~H.\ Hardy and J.~E.\ Littlewood,
+\emph{Some problems of `Partitio Numerorum'\,III: On the expression of a
+number as a sum of primes},
+Acta Mathematica \textbf{44} (1923), 1–70.
+DOI: \href{https://doi.org/10.1007/BF02403921}{10.1007/BF02403921}.
+
+\bibitem{miller}
+G.~L.\ Miller,
+\emph{Riemann's hypothesis and tests for primality},
+Journal of Computer and System Sciences \textbf{13} (1976), 300–317.
+DOI: \href{https://doi.org/10.1016/S0022-0000(76)80043-8}{10.1016/S0022-0000(76)80043-8}.
+
+\bibitem{miller-rabin}
+M.~O.\ Rabin,
+\emph{Probabilistic algorithm for testing primality},
+Journal of Number Theory \textbf{12} (1980), 128–138.
+DOI: \href{https://doi.org/10.1016/0022-314X(80)90084-0}{10.1016/0022-314X(80)90084-0}.
+
+\bibitem{mr-deterministic}
+J.~Sorenson and J.~Webster,
+\emph{Strong pseudoprimes to twelve prime bases},
+Mathematics of Computation \textbf{86} (2017), 985–1003.
+DOI: \href{https://doi.org/10.1090/mcom/3134}{10.1090/mcom/3134}.
+The twelve bases $\{2,3,5,7,11,13,17,19,23,29,31,37\}$ yield a
+deterministic test for all $n < 3.317\cdot 10^{24}$, covering the
+full \texttt{uint64\_t} range used in this work.
+
+\bibitem{corti-oeis}
+C.\ Corti,
+\emph{Contribution to OEIS A338700: lower bound $a(9) > 5\cdot 10^{14}$},
+The On-Line Encyclopedia of Integer Sequences,
+\url{https://oeis.org/A338700}, 2026.
+
+\bibitem{repo}
+C.\ Corti,
+\emph{A338700 — extending the OEIS sequence: source code, logs and
+reproducibility artefacts},
+GitHub repository: \url{https://github.com/<TBD>/a338700}.
+Archived release: Zenodo, DOI \texttt{10.5281/zenodo.<TBD>}.
+
+\end{thebibliography}
+
+\end{document}

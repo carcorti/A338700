@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this code or the lower bound a(9) > 5e14 for OEIS A338700, please cite this repository."
+title: "A computer-verified lower bound for the ninth term of OEIS sequence A338700"
+authors:
+  - family-names: "Corti"
+    given-names: "Carlo"
+abstract: >-
+  C17/OpenMP implementation performing an exhaustive search for the ninth term
+  of OEIS A338700. The search covers [1372604395439, 500000000000000]
+  and establishes the verified lower bound a(9) > 5e14.
+keywords:
+  - OEIS
+  - A338700
+  - Sophie Germain primes
+  - double sieve
+  - Miller-Rabin primality test
+  - OpenMP
+  - computational number theory
+  - lower bound
+license: MIT
+version: "1.0.0"
+date-released: 2026-05-04
+repository-code: "https://github.com/<TBD>/a338700"
+doi: "10.5281/zenodo.<TBD>"

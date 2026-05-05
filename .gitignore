@@ -1,0 +1,55 @@
+# Build artifacts
+src/a338700
+src/*.o
+src/*.obj
+src/*.out
+src/*.exe
+src/gmon.out
+
+# Profiling and sanitizer outputs
+*.gcda
+*.gcno
+*.gcov
+perf.data
+perf.data.*
+callgrind.out.*
+massif.out.*
+
+# Checkpoints and temporary campaign state
+*.state
+*.state.tmp
+*.checkpoint
+*.checkpoint.tmp
+*.ckpt
+*.tmp
+*.temp
+
+# Logs generated locally during test/campaign runs
+*.log.tmp
+logs/*.tmp
+
+# LaTeX auxiliary files
+paper/*.aux
+paper/*.bbl
+paper/*.bcf
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.run.xml
+paper/*.synctex.gz
+paper/*.toc
+
+# Editor and OS files
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Python/cache directories occasionally produced by local tooling
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
